@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Millwright Toolkit</title>
+</head>
+<body>
+  <script src="calc.js"></script>
+  <script>
+    // Aspect ratio (width / height) of the result card per action.
+    const CARD_ASPECT = {
+      bolt_torque: 0.56,
+      belt_drive: 0.47,
+      bearing_life: 0.6,
+      bearing_faults: 0.45,
+    };
+
+    window['ai_edge_gallery_get_result'] = async (data) => {
+      try {
+        const input = JSON.parse(data);
+        const out = window.MillCalc.run(input);
+
+        // The LLM gets compact numbers and is told to quote them, not redo them.
+        const summary = {
+          calculation: out.title,
+          [out.primary.label]: `${out.primary.value} ${out.primary.unit}`,
+          values: out.values,
+          warnings: out.warnings,
+          note: 'Computed by the skill. Report these values exactly; do not recalculate.',
+        };
+
+        return JSON.stringify({
+          result: JSON.stringify(summary),
+          webview: {
+            url: `card.html?r=${encodeURIComponent(JSON.stringify(out))}`,
+            aspectRatio: CARD_ASPECT[out.action] ?? 0.75,
+          },
+        });
+      } catch (e) {
+        console.error(e);
+        return JSON.stringify({ error: `Millwright Toolkit: ${e.message}` });
+      }
+    };
+  </script>
+</body>
+</html>

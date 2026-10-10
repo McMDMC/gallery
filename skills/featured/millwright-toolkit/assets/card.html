@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Millwright Toolkit</title>
+  <style>
+    /* Fully offline: no web fonts, no CDN. */
+    :root {
+      --bg: #17191c;
+      --panel: #212429;
+      --line: #33373e;
+      --text: #eceef1;
+      --dim: #9aa1ab;
+      --safety: #ffc20e;
+      --warn-bg: #3a2a08;
+      --mono: ui-monospace, 'SF Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: var(--bg); color: var(--text); }
+    body {
+      font: 14px/1.4 system-ui, -apple-system, 'Roboto', sans-serif;
+      padding: 0 0 12px;
+    }
+    .stripe {
+      height: 8px;
+      background: repeating-linear-gradient(-45deg, var(--safety) 0 10px, #111 10px 20px);
+    }
+    header { padding: 12px 14px 4px; }
+    .tag {
+      font: 600 10px/1 var(--mono);
+      letter-spacing: .12em;
+      color: var(--safety);
+      text-transform: uppercase;
+    }
+    h1 { font-size: 15px; font-weight: 600; margin-top: 6px; }
+    .hero { padding: 6px 14px 10px; }
+    .hero .label { color: var(--dim); font-size: 12px; }
+    .hero .value { font: 700 34px/1.1 var(--mono); color: var(--safety); }
+    .hero .unit { font-size: 16px; color: var(--text); margin-left: 4px; }
+    section { margin: 8px 14px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+    section h2 {
+      font: 600 10px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+      color: var(--dim); padding: 9px 10px 6px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 5px 10px; border-top: 1px solid var(--line); font-size: 13px; }
+    td:last-child { text-align: right; font-family: var(--mono); }
+    td:first-child { color: var(--dim); }
+    .faults td, .faults th { text-align: right; font-family: var(--mono); white-space: nowrap; padding: 5px 6px; }
+    .faults td:first-child, .faults th:first-child { text-align: left; font-family: inherit; padding-left: 10px; }
+    .faults td:last-child, .faults th:last-child { padding-right: 10px; }
+    .faults th { font-size: 10px; font-weight: 600; color: var(--dim); padding-top: 0; }
+    .formula { padding: 0 10px 10px; font: 12px/1.5 var(--mono); color: var(--text); overflow-wrap: anywhere; }
+    .warn {
+      margin: 8px 14px 0; padding: 8px 10px; border-radius: 8px;
+      background: var(--warn-bg); border-left: 3px solid var(--safety); font-size: 12px;
+    }
+    svg { display: block; width: 100%; height: auto; }
+    svg text { font: 10px var(--mono); fill: var(--dim); }
+    .foot { margin: 10px 14px 0; font-size: 10px; color: var(--dim); }
+    .err { padding: 16px; color: var(--safety); font-family: var(--mono); }
+  </style>
+</head>
+<body>
+  <div class="stripe"></div>
+  <main id="app"></main>
+
+  <script>
+    const LABELS = {
+      torque_ftlb: 'Torque (ft·lb)', torque_inlb: 'Torque (in·lb)', torque_nm: 'Torque (N·m)',
+      clamp_load_lbf: 'Clamp load (lbf)', clamp_load_kn: 'Clamp load (kN)',
+      tensile_stress_area_in2: 'Stress area As (in²)', tensile_stress_area_mm2: 'Stress area As (mm²)',
+      proof_strength_psi: 'Proof strength (psi)', proof_strength_mpa: 'Proof strength (MPa)',
+      nut_factor_k: 'Nut factor K', preload_pct: 'Preload (% proof)',
+      driven_rpm: 'Driven speed (rpm)', driven_dia: 'Driven sheave dia', speed_ratio: 'Speed ratio',
+      belt_speed_fpm: 'Belt speed (ft/min)', belt_speed_mps: 'Belt speed (m/s)',
+      belt_length: 'Belt pitch length', small_sheave_wrap_deg: 'Wrap, small sheave (°)',
+      l10_hours: 'L10 (hours)', l10_million_rev: 'L10 (million rev)',
+      years_continuous: 'Years @ 24/7', years_one_shift: 'Years @ 1 shift',
+      life_exponent: 'Life exponent p', load_ratio_c_over_p: 'C / P',
+    };
+
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fmt = (v) => typeof v === 'number' ? v.toLocaleString('en-US', { maximumFractionDigits: 4 }) : esc(v);
+    const rows = (obj, labels = {}) =>
+      Object.entries(obj).map(([k, v]) => `<tr><td>${esc(labels[k] || k.replace(/_/g, ' '))}</td><td>${fmt(v)}</td></tr>`).join('');
+
+    // Bearing faults: a mock spectrum marking 1×, FTF, BSF, BPFO, BPFI and their 2× harmonics.
+    function faultSpectrum(v) {
+      const lines = [
+        { k: '1×', hz: v.shaft_hz, c: '#9aa1ab' },
+        { k: 'FTF', hz: v.ftf_hz, c: '#7fb3ff' },
+        { k: 'BSF', hz: v.bsf_hz, c: '#c792ea' },
+        { k: 'BPFO', hz: v.bpfo_hz, c: '#ffc20e' },
+        { k: 'BPFI', hz: v.bpfi_hz, c: '#ff6b5a' },
+      ];
+      const W = 320, H = 130, pad = 22;
+      const max = v.bpfi_hz * 2.15;
+      const x = (hz) => pad + (hz / max) * (W - pad * 2);
+      let marks = '';
+      lines.forEach((l, i) => {
+        [1, 2].forEach((h) => {
+          const hz = l.hz * h;
+          if (hz > max) return;
+          const top = h === 1 ? 26 + (i % 2) * 12 : 62;
+          marks += `<line x1="${x(hz)}" x2="${x(hz)}" y1="${H - pad}" y2="${top}" stroke="${l.c}" stroke-width="${h === 1 ? 2 : 1}" stroke-dasharray="${h === 1 ? '' : '3 3'}"/>`;
+          if (h === 1) marks += `<text x="${x(hz)}" y="${top - 4}" text-anchor="middle" style="fill:${l.c}">${l.k}</text>`;
+        });
+      });
+      const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => {
+        const hz = t * max;
+        return `<text x="${x(hz)}" y="${H - 6}" text-anchor="middle">${Math.round(hz)}</text>`;
+      }).join('');
+      return `<section><h2>Where to look in the spectrum (Hz)</h2>
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Fault frequency markers">
+          <line x1="${pad}" x2="${W - pad}" y1="${H - pad}" y2="${H - pad}" stroke="#33373e"/>
+          ${marks}${ticks}
+        </svg></section>`;
+    }
+
+    function faultTable(v) {
+      const names = { ftf: 'FTF cage', bsf: 'BSF ball', bpfo: 'BPFO outer', bpfi: 'BPFI inner' };
+      const body = Object.entries(names).map(([k, n]) =>
+        `<tr><td>${n}</td><td>${fmt(v[k + '_hz'])}</td><td>${fmt(v[k + '_cpm'])}</td><td>${fmt(v[k + '_order'])}×</td></tr>`).join('');
+      return `<section><h2>Defect frequencies</h2><table class="faults">
+        <tr><th></th><th>Hz</th><th>cpm</th><th>order</th></tr>${body}</table></section>`;
+    }
+
+    // Belt drive: sheaves, centers and belt tangents drawn to scale.
+    function beltSketch(v, inputs) {
+      const d1 = parseFloat(inputs.driver), d2 = v.driven_dia;
+      const C = inputs.centers ? parseFloat(inputs.centers) : 1.6 * Math.max(d1, d2);
+      const W = 320, H = 120;
+      const s = Math.min((W - 40) / (C + (d1 + d2) / 2), (H - 30) / Math.max(d1, d2));
+      const r1 = s * d1 / 2, r2 = s * d2 / 2, cy = 54;
+      const cx1 = (W - s * C - r1 - r2) / 2 + r1, cx2 = cx1 + s * C;
+      // External tangents: unit normal (−sinβ, ∓cosβ), sinβ = (r2 − r1) / center spacing.
+      const sb = (r2 - r1) / (s * C), cb = Math.sqrt(1 - sb * sb);
+      const tan = (sign) => `<line x1="${cx1 - r1 * sb}" y1="${cy + sign * r1 * cb}" x2="${cx2 - r2 * sb}" y2="${cy + sign * r2 * cb}" stroke="#ffc20e" stroke-width="2"/>`;
+      return `<section><h2>Layout (to scale)</h2>
+        <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Driver and driven sheaves">
+          ${tan(-1)}${tan(1)}
+          <circle cx="${cx1}" cy="${cy}" r="${r1}" fill="#212429" stroke="#eceef1" stroke-width="2"/>
+          <circle cx="${cx2}" cy="${cy}" r="${r2}" fill="#212429" stroke="#eceef1" stroke-width="2"/>
+          <circle cx="${cx1}" cy="${cy}" r="2.5" fill="#eceef1"/><circle cx="${cx2}" cy="${cy}" r="2.5" fill="#eceef1"/>
+          <text x="${cx1}" y="${H - 4}" text-anchor="middle">DRIVER</text>
+          <text x="${cx2}" y="${H - 4}" text-anchor="middle">${fmt(v.driven_rpm)} rpm</text>
+        </svg></section>`;
+    }
+
+    function render(r) {
+      let html = `
+        <header><div class="tag">Millwright Toolkit · on-device</div><h1>${esc(r.title)}</h1></header>
+        <div class="hero">
+          <div class="label">${esc(r.primary.label)}</div>
+          <div class="value">${fmt(r.primary.value)}<span class="unit">${esc(r.primary.unit)}</span></div>
+        </div>`;
+      html += (r.warnings || []).map((w) => `<div class="warn">⚠ ${esc(w)}</div>`).join('');
+
+      if (r.action === 'bearing_faults') {
+        html += faultSpectrum(r.values) + faultTable(r.values);
+      } else {
+        if (r.action === 'belt_drive') html += beltSketch(r.values, r.inputs);
+        html += `<section><h2>Results</h2><table>${rows(r.values, LABELS)}</table></section>`;
+      }
+      html += `<section><h2>Inputs</h2><table>${rows(r.inputs)}</table></section>`;
+      html += `<section><h2>Formula</h2><div class="formula">${r.formula.split(/\s{3,}/).map(esc).join('<br>')}</div></section>`;
+      html += `<p class="foot">Engineering estimate from published formulas. OEM specs and site procedures take precedence.</p>`;
+      document.getElementById('app').innerHTML = html;
+    }
+
+    try {
+      const raw = new URLSearchParams(location.search).get('r');
+      if (!raw) throw new Error('No result passed to card.');
+      render(JSON.parse(raw));
+    } catch (e) {
+      document.getElementById('app').innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    }
+  </script>
+</body>
+</html>

@@ -570,6 +570,12 @@ access to real-time console logs.
   ![Webview](https://img.shields.io/badge/Webview-ee9b00)
   ![Secret](https://img.shields.io/badge/Secret-f72585)
 
+- [**Millwright toolkit**](featured/millwright-toolkit)
+  <br>Shop-floor calculator: bolt torque, belt drives, bearing L10 life and bearing defect frequencies.
+  <br>
+  ![JS](https://img.shields.io/badge/JS-0a9396)
+  ![Webview](https://img.shields.io/badge/Webview-ee9b00)
+
 - [**Send email**](built-in/send-email)
   <br>Send an email.
   <br>
